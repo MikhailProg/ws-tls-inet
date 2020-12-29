@@ -13,20 +13,29 @@ $ make
 ### WS
 
 -s -- start in server mode
+
 -r -- reverse pipes
+
 -b -- force the tool use binary frames (text by default) 
+
 -h host -- set Host header during handshake
+
 -u uri -- set uri during handshake
 
 ### TLS
 -s -- start in server mode
+
 -r -- reverse pipes
+
 -c -- use certificate credentials (client only) 
+
 -h host -- set SNI (Server Name Indication, client only)
 
 ### INET
 -s -- start in server mode
+
 -r -- reverse pipes
+
 -k -- keep accepting new connections (by default accept only one, server only)
 
 ## Usage
