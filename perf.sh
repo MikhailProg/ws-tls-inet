@@ -22,7 +22,6 @@ perf() {
             $cmd -- dd $blk of=/dev/null 2>log.$$
         sleep 2
         speed=$(sed -n 's/^.* s, //p' log.$$)
-        test -z "$speed" && exit 1
         printf "%15s %15s\n" $txt "$speed"
     done <<EOF
 WS(txt)     @ws $wsopt -s    -- rdwr   -- rdwr   -- ws $wsopt -r
