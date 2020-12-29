@@ -1,10 +1,13 @@
 # WS + TLS + INET (RDWR)
 
-The tool includes WS client, WS server, TLS client (cert and anon), TLS server (anon only), TCP network client, TCP network server.
+The tool includes WS client, WS server, TLS client (cert and anon), TLS server (anon only), TCP network client, TCP network server. GnuTLS is used for TLS.
 
 ## Build
 
+GnuTLS dev package name may be different for your distro.
+
 ```
+$ sudo apt-get install libgnutls28-dev
 $ make
 ```
 
