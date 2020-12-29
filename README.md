@@ -82,7 +82,7 @@ $ inet -r ws.kraken.com 443 -- tls -r -c -h ws.kraken.com -- ws -r -h ws.kraken.
 
 Local usage (that how test.sh and perf.sh works).
 
-Pass stdin data through a client and a server to cat, then cat returns data back through the server and the client to stdout. There are 2 pipes in forward and backward direction:
+Pass stdin data through a client and a server to cat then cat returns data back through the server and the client to stdout. There are 2 pipes in forward and backward direction:
 
 ```
 $ PATH=$PATH:.
@@ -102,7 +102,7 @@ $ PATH=$PATH:.
 $ setsid inet -r -s -k localhost 1234 -- ws -r -s -h test -u / -- sh -c 'exec bash -i 2>&1' >/dev/null </dev/null 2>&1
 ```
 
-setsid and /dev/nulled stdin/stdout/stderr are basically daemonize inet.
+setsid and /dev/nulled stdin/stdout/stderr basically daemonize inet.
 
 Now connect from another terminals to WS remote shell server:
 ```
