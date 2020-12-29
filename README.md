@@ -65,7 +65,7 @@ Send ping event:
 
 ```
 $ PATH=$PATH:.
-$ while :; do printf '{ "event" : "ping" }'; sleep 5; done  | ./ws -h ws.kraken.com -u / -- tls -c -h ws.kraken.com -- inet ws.kraken.com 443
+$ while :; do printf '{ "event" : "ping" }'; sleep 5; done  | ws -h ws.kraken.com -u / -- tls -c -h ws.kraken.com -- inet ws.kraken.com 443
 
 ```
 
