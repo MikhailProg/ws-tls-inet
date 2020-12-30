@@ -1,6 +1,6 @@
 # WS + TLS + INET (RDWR)
 
-The tool includes WS client, WS server, TLS client (cert and anon), TLS server (anon only), TCP network client, TCP network server. GnuTLS is used for TLS.
+The tool includes WS client, WS server, TLS client (cert and anon), TLS server (anon only), TCP client, TCP server. GnuTLS is used for TLS.
 
 ## Build
 
@@ -41,11 +41,16 @@ $ make
 
 -k -- keep accepting new connections (by default accept only one, server only)
 
+The last two arguments are host and port.
+
+
+tls and ws tools read/write plain data from/to the left side and their specific protocol data from/to the right side of a chain. The reverse option internally swaps these directions (check examples below).
+
 ## Usage
 
-Begin with simple examples, connect to some public services in a client mode.
+### Client usage
 
-Public wss echo server:
+Connect to public wss echo server:
 
 ```
 $ PATH=$PATH:.
@@ -53,7 +58,8 @@ $ ws -h echo.websocket.org -u / -- tls -c -- inet echo.websocket.org 443
 
 ```
 
-Public Kraken API server. Kraken needs to set SNI (tls -h option).
+
+Kraken API server. Kraken needs to set SNI (tls -h option).
 
 ```
 $ PATH=$PATH:.
@@ -72,7 +78,7 @@ $ while :; do printf '{ "event" : "ping" }'; sleep 5; done  | ws -h ws.kraken.co
 
 ```
 
-If there is an application that can work with Kraken API you need to reverse chain (-r option for all tools), app STDIN and STDOUT descriptors are connected to Kraken and stripped out of WS and TLS.
+If there is an application that can work with Kraken API you need to reverse chain (-r option for all tools) to pass data to your application, app stdin and stdout descriptors are connected to Kraken and stripped out of WS and TLS. All tools in a chain share stderr so app can log messages to stderr.
 
 ```
 $ PATH=$PATH:.
@@ -80,7 +86,7 @@ $ inet -r ws.kraken.com 443 -- tls -r -c -h ws.kraken.com -- ws -r -h ws.kraken.
 
 ```
 
-Local usage (that how test.sh and perf.sh works).
+### Client and server usage
 
 Pass stdin data through a client and a server to cat then cat returns data back through the server and the client to stdout. There are 2 pipes in forward and backward direction:
 
@@ -89,22 +95,23 @@ $ PATH=$PATH:.
 $ ws -h test -u / -- ws -r -s -h test -u / -- cat
 ```
 
-The same example but adding TLS client and server:
+Add TLS client and server to the previous chain:
 ```
 $ PATH=$PATH:.
 $ ws -h test -u / -- tls -- tls -r -s -- ws -r -s -h test -u / -- cat
 ```
 
-Run a remote shell server (setsid is important to detach inet from a control terminal), -k option force inet accepting more and more clients, for each connection bash is spawned. The chain is reversed to pass data to bash STDIN/STDOUT:
+
+Run a WS remote shell server (setsid is important to detach inet from a control terminal), -k option force inet to accept more than one client, for each connection bash is spawned. The chain is reversed to pass data to bash stdin/stdout:
 
 ```
 $ PATH=$PATH:.
 $ setsid inet -r -s -k localhost 1234 -- ws -r -s -h test -u / -- sh -c 'exec bash -i 2>&1' >/dev/null </dev/null 2>&1
 ```
 
-setsid and /dev/nulled stdin/stdout/stderr basically daemonize inet.
+setsid and /dev/nulled stdin/stdout/stderr basically daemonize inet. Since bash is detached from a terminal it needs to be run interactively (-i).
 
-Now connect from another terminals to WS remote shell server:
+Connect from another terminals to WS remote shell server:
 ```
 $ PATH=$PATH:.
 $ ws -h test -u / -- inet localhost 1234

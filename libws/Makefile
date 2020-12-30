@@ -1,4 +1,4 @@
-CFLAGS  := -pipe -Wall -Wextra -Wno-type-limits
+CFLAGS  := -pipe -Wall -Wextra
 ARFLAGS := rv
 OS      := $(shell uname -s)
 TARGET  := wscat

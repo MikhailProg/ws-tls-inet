@@ -879,8 +879,9 @@ int main(int argc, char *argv[])
 	}
 
 	argv += optind;
+	argc -= optind;
 
-	if ((prog & INET && argc < 3) || argc < 2)
+	if ((prog & INET && argc < 2 + rev) || argc < 1)
 		errx(EXIT_FAILURE, "not enough arguments");
 
 	if (prog & WS) {

@@ -3,13 +3,13 @@ LDFLAGS := -Llibws
 LDLIBS  := -lgnutls -lws -linet
 PWD     := $(shell pwd)
 
-TARGETS := libws rdwr ws tls inet
+TARGETS := rdwr ws tls inet
 
 .PHONY: all clean libws
 
 all: $(TARGETS)
 
-rdwr.o: libws/libws.a libws/libinet.a
+rdwr.o: libws
 
 rdwr:
 
