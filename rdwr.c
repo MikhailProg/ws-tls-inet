@@ -622,20 +622,21 @@ static void ws(int fd[2][2], const char *host, const char *uri,
 					    (n[i] == WS_E_OP_PING &&
 					     op & OP_PNG))
 						goto out;
-					if (n[i] == WS_E_OP_PING)
+					if (n[i] == WS_E_OP_PING) {
+						ctrlsz = ws.ctrlsz;
+						memcpy(ctrl, ws.ctrl, ctrlsz);
 						op |= OP_PNG;
-					else if (n[i] == WS_E_OP_CLOSE)
+					} else if (n[i] == WS_E_OP_CLOSE) {
+						ecode = ws.ecode;
 						op |= OP_CLS;
+					}
 					/* If the forward path is alive
-					 * schedule WS_E_OP reply. */
+					 * schedule opcode reply. */
 					if (fds[0].fd != -1) {
 						fds[0].fd = fd[1][1];
 						fds[0].events = POLLOUT;
 						fds[0].revents &=
 							~(POLLIN | POLLHUP);
-						ecode  = ws.ecode;
-						ctrlsz = ws.ctrlsz;
-						memcpy(ctrl, ws.ctrl, ctrlsz);
 					}
 					/* Finalize the backward path. */
 					if (n[i] == WS_E_OP_CLOSE)
@@ -660,21 +661,43 @@ out:
 
 			if (fds[i].revents & POLLOUT) {
 				assert(w == fds[i].fd);
-				assert(n[i] > 0 || (i == 0 && op > 0));
+				assert(n[i] > 0 || (i == 0 && op));
 
-				while (n[i] > 0) {
-					if (i == 0)
+				while (n[i] > 0 || (i == 0 && op)) {
+					if (i == 0 && n[i] > 0)
 						m[i] = ws_write(&ws, buf[i] +
 								woff[i], n[i]);
+					else if (i == 0 && op & OP_PNG)
+						m[i] = ws_pong(&ws, ctrl, ctrlsz);
+					else if (i == 0 && op & OP_CLS)
+						m[i] = ws_close(&ws, ecode,
+									NULL, 0);
 					else
 						m[i] = write(w, buf[i] +
 								woff[i], n[i]);
 					if (m[i] > 0) {
 						n[i]    -= m[i];
 						woff[i] += m[i];
-						/* The buffer is written. */
-						if (n[i] == 0) {
+						/* The buffer is written and
+						 * there is no opcode reply. */
+						if (n[i] == 0 &&
+						    ((i == 0 && !op) || i == 1)) {
 							/* Stop OUT, start IN. */
+							fds[i].fd = r;
+							fds[i].events = POLLIN;
+						}
+					} else if (i == 0 && m[i] == 0) {
+						/* PNG and CLS only, user data
+						 * is drained. */
+						assert(n[i] == 0);
+						if (op & OP_PNG) {
+							op &= ~OP_PNG;
+						} else if (op & OP_CLS) {
+							op &= ~OP_CLS;
+							goto end;
+						}
+
+						if (!op) {
 							fds[i].fd = r;
 							fds[i].events = POLLIN;
 						}
@@ -686,58 +709,29 @@ out:
 						uoff = n[i];
 						n[i] = 0;
 						/* Stop OUT, start IN. */
-						fds[i].fd = r;
-						fds[i].events = POLLIN;
+						if (!op) {
+							fds[i].fd = r;
+							fds[i].events = POLLIN;
+						}
 					} else {
 						if ((i == 0 && WS_E_SOFT(m[i])) ||
 						    (i == 1 && UNIX_E_SOFT))
 							break;
 						if (i == 0)
-							warnx("ws_write(): "
+							warnx("ws_%s(): "
 								"failed 0x%zX",
+								n[i] > 0 ?
+									"write" :
+								op & OP_PNG ?
+									"pong" :
+									"close",
 									-m[i]);
 						else
 							warn("write()");
-					goto end;
-
-					}
-				}
-
-				/* WS_E_OP message reply. Check that user
-				 * data is drained */
-				if (i == 0 && op > 0 && n[0] == 0) {
-					if (op & OP_PNG)
-						rc = ws_pong(&ws, ctrl, ctrlsz);
-					else if (op & OP_CLS)
-						rc = ws_close(&ws, ecode, NULL, 0);
-
-					if (rc == 0) {
-						if (op & OP_PNG) {
-							op &= ~OP_PNG;
-						} else if (op & OP_CLS) {
-							op &= ~OP_CLS;
-							goto end;
-						}
-
-						if (op & OP_CLS) {
-							fds[i].fd = w;
-							fds[i].events = POLLOUT;
-						} else {
-							fds[i].fd = r;
-							fds[i].events = POLLIN;
-						}
-					} else if (rc == WS_E_WANT_WRITE) {
-						fds[i].fd = w;
-						fds[i].events = POLLOUT;
-					} else if (rc < 0) {
-						warnx("ws_%s(): failed -0x%X",
-							op & OP_PNG ?
-							    "pong" : "close",
-								-rc);
-						/* Finalize the forward path. */
 						goto end;
 					}
 				}
+
 			}
 
 			continue;
