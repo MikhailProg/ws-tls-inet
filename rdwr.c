@@ -604,7 +604,7 @@ static void ws(int fd[2][2], const char *host, const char *uri,
 
 				if (i == 0)
 					n[i] = read(r, buf[i] + uoff,
-						sizeof(buf[i]) - uoff);
+							sizeof(buf[i]) - uoff);
 				else
 					n[i] = ws_read(&ws, buf[i],
 							sizeof(buf[i]), &txt);
@@ -731,7 +731,6 @@ out:
 						goto end;
 					}
 				}
-
 			}
 
 			continue;
