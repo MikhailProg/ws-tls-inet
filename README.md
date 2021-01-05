@@ -36,6 +36,8 @@ $ make
 
 -K keyfile -- use a private key related to a certificate file (server only, check -C option)
 
+-n -- don't verify a server certificate, works only in conjunction with -c (client only)
+
 -r -- reverse pipes
 
 -s -- start in server mode
@@ -113,10 +115,10 @@ $ PATH=$PATH:.
 $ ws -h test -u / -- tls -- tls -r -s -- ws -r -s -h test -u / -- cat
 ```
 
-TLS client and server with certificate credentials:
+TLS client and server with certificate credentials (since cert.pem is self-signed the client use -n option):
 ```
 $ PATH=$PATH:.
-$ ws -h test -u / -- tls -c -- tls -r -s -C cert.pem -K key.pem -- ws -r -s -h test -u / -- cat
+$ ws -h test -u / -- tls -c -n -- tls -r -s -C cert.pem -K key.pem -- ws -r -s -h test -u / -- cat
 ```
 
 

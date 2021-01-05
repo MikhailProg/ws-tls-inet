@@ -439,7 +439,19 @@ end:
 	}
 }
 
-static void tls_clt(int fds[2][2], const char *host, int cert)
+static int verify_callback(gnutls_session_t s)
+{
+	unsigned int status;
+	int rc;
+
+	rc = gnutls_certificate_verify_peers2(s, &status);
+	if (rc != GNUTLS_E_SUCCESS)
+		return rc;
+
+	return status;
+}
+
+static void tls_clt(int fds[2][2], const char *host, int cert, int noverify)
 {
 	gnutls_certificate_credentials_t certcred;
 	gnutls_anon_client_credentials_t anoncred;
@@ -449,9 +461,13 @@ static void tls_clt(int fds[2][2], const char *host, int cert)
 	if (cert) {
 		gnutls_certificate_allocate_credentials(&certcred);
 		gnutls_certificate_set_x509_system_trust(certcred);
+		if (!noverify)
+			gnutls_certificate_set_verify_function(certcred,
+							verify_callback);
 	} else {
 		gnutls_anon_allocate_client_credentials(&anoncred);
 	}
+
 
 	gnutls_init(&s, GNUTLS_CLIENT);
 	gnutls_priority_set_direct(s, cert ? "PERFORMANCE" :
@@ -848,7 +864,7 @@ static int inet_fd(const char *addr, const char *port,
 int main(int argc, char *argv[])
 {
 	extern const char *const __progname;
-	int opt, rev = 0, bin = 0, srv = 0, cert = 0, keep = 0;
+	int opt, rev = 0, bin = 0, srv = 0, cert = 0, keep = 0, noverify = 0;
 	char *host = NULL, *uri = NULL, *certfile = NULL, *keyfile = NULL;
 	char *optstr;
 	int prog = STREQ(__progname, "ws")   ? WS  :
@@ -865,7 +881,7 @@ int main(int argc, char *argv[])
 	srand(time(NULL));
 
 	optstr = prog & WS   ? "bh:rsu:"	:
-		 prog & TLS  ? "cC:h:K:rs"	:
+		 prog & TLS  ? "cC:h:K:nrs"	:
 		 prog & INET ? "krs"		: "";
 
 	while ((opt = getopt(argc, argv, optstr)) != -1) {
@@ -878,6 +894,7 @@ int main(int argc, char *argv[])
 		OPT_STR ('h', host)
 		OPT_STR ('K', keyfile)
 		OPT_BOOL('k', keep)
+		OPT_BOOL('n', noverify)
 		OPT_BOOL('r', rev)
 		OPT_BOOL('s', srv)
 		OPT_STR ('u', uri)
@@ -924,7 +941,7 @@ int main(int argc, char *argv[])
 
 	prog & WS   ?  ws(fds, host, uri, srv, bin) :
 	prog & TLS  ? (srv ? tls_srv(fds, certfile, keyfile) :
-			     tls_clt(fds, host, cert)) :
+			     tls_clt(fds, host, cert, noverify)) :
 	prog & INET ?  rdwr(fds) : rdwr(fds);
 
 #define S(s) s, sizeof(s)-1
