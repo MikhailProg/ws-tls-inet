@@ -216,10 +216,10 @@ end:
 static void wait_event(int fd, int r)
 {
 	struct pollfd fds;
-	int rc; 
+	int rc;
 
 	/* Schedule event. */
-	fds.fd = fd; 
+	fds.fd = fd;
 	fds.events = r ? POLLIN : POLLOUT;
 	do {
 		rc = poll(&fds, 1, -1);
@@ -384,7 +384,7 @@ static void tls(gnutls_session_t s, int fd[2][2])
 							gnutls_strerror(n[i]));
 					else
 						warnx("%s: EOF", i == 0 ?
-							"read()" : 
+							"read()" :
 							"gnutls_record_recv()");
 					goto end;
 				}
@@ -443,7 +443,7 @@ static void tls_clt(int fds[2][2], const char *host, int cert)
 {
 	gnutls_certificate_credentials_t certcred;
 	gnutls_anon_client_credentials_t anoncred;
-	gnutls_session_t session;
+	gnutls_session_t s;
 
 	gnutls_global_init();
 	if (cert) {
@@ -453,48 +453,71 @@ static void tls_clt(int fds[2][2], const char *host, int cert)
 		gnutls_anon_allocate_client_credentials(&anoncred);
 	}
 
-	gnutls_init(&session, GNUTLS_CLIENT);
-	gnutls_priority_set_direct(session, cert ? "PERFORMANCE" :
-						   "PERFORMANCE:+ANON-DH", NULL);
+	gnutls_init(&s, GNUTLS_CLIENT);
+	gnutls_priority_set_direct(s, cert ? "PERFORMANCE" :
+					     "PERFORMANCE:+ANON-DH", NULL);
 
-	gnutls_credentials_set(session, cert ? GNUTLS_CRD_CERTIFICATE :
-					       GNUTLS_CRD_ANON,
-					cert ? (void *)certcred : (void *)anoncred);
+	gnutls_credentials_set(s, cert ?
+				GNUTLS_CRD_CERTIFICATE : GNUTLS_CRD_ANON,
+				  cert ? (void *)certcred : (void *)anoncred);
 	if (host)
-		gnutls_server_name_set(session, GNUTLS_NAME_DNS,
-						host, strlen(host));
-	tls(session, fds);
+		gnutls_server_name_set(s, GNUTLS_NAME_DNS, host, strlen(host));
 
-	gnutls_deinit(session);
+	tls(s, fds);
+
+	gnutls_deinit(s);
 	if (cert)
 		gnutls_certificate_free_credentials(certcred);
 	else
 		gnutls_anon_free_client_credentials(anoncred);
-
 	gnutls_global_deinit();
 }
 
-static void tls_srv(int fds[2][2])
+static void tls_srv(int fds[2][2], const char *certfile, const char *keyfile)
 {
+	gnutls_certificate_credentials_t certcred;
 	gnutls_anon_server_credentials_t anoncred;
 	gnutls_dh_params_t dh_params;
-	gnutls_session_t session;
+	gnutls_session_t s;
+	int rc, cert = certfile != NULL && keyfile != NULL;
 #define DH_BITS		1024
 	gnutls_global_init();
-	gnutls_anon_allocate_server_credentials (&anoncred);
+	if (cert) {
+		gnutls_certificate_allocate_credentials(&certcred);
+		rc = gnutls_certificate_set_x509_key_file(certcred,
+							  certfile,
+							  keyfile,
+							  GNUTLS_X509_FMT_PEM);
+		if (rc != GNUTLS_E_SUCCESS)
+			errx(EXIT_FAILURE, "gnutls_certificate_set_x509"
+						"_key_file(): %s",
+							gnutls_strerror(rc));
+	} else {
+		gnutls_anon_allocate_server_credentials(&anoncred);
+	}
+
 	gnutls_dh_params_init(&dh_params);
 	gnutls_dh_params_generate2(dh_params, DH_BITS);
-	gnutls_anon_set_server_dh_params(anoncred, dh_params);
 
-	gnutls_init(&session, GNUTLS_SERVER);
-	gnutls_priority_set_direct(session, "PERFORMANCE:+ANON-DH", NULL);
-	gnutls_credentials_set(session, GNUTLS_CRD_ANON, anoncred);
-	gnutls_dh_set_prime_bits(session, DH_BITS);
+	if (cert)
+		gnutls_certificate_set_dh_params(certcred, dh_params);
+	else
+		gnutls_anon_set_server_dh_params(anoncred, dh_params);
+
+	gnutls_init(&s, GNUTLS_SERVER);
+	gnutls_priority_set_direct(s, cert ? "PERFORMANCE" :
+					     "PERFORMANCE:+ANON-DH", NULL);
+	gnutls_credentials_set(s, cert ?
+				GNUTLS_CRD_CERTIFICATE : GNUTLS_CRD_ANON,
+				  cert ? (void *)certcred : (void *)anoncred);
 #undef DH_BITS
-	tls(session, fds);
+	tls(s, fds);
 
-	gnutls_deinit(session);
-	gnutls_anon_free_server_credentials(anoncred);
+	gnutls_deinit(s);
+	if (cert)
+		gnutls_certificate_free_credentials(certcred);
+	else
+		gnutls_anon_free_server_credentials(anoncred);
 	gnutls_global_deinit();
 }
 
@@ -543,7 +566,7 @@ static void ws(int fd[2][2], const char *host, const char *uri,
 	ssize_t (*ws_write)(WebSocket *, const void *, size_t);
 	int wsinput, timeout;
 
-	/* [0][0] and [0][1] are for plane data, 
+	/* [0][0] and [0][1] are for plane data,
 	 * [1][0] and [1][1] are for WS data. */
 	ws_init(&ws, srv > 0);
 	ws_set_bio(&ws, fd[1], wso, wsi);
@@ -678,14 +701,6 @@ out:
 					if (m[i] > 0) {
 						n[i]    -= m[i];
 						woff[i] += m[i];
-						/* The buffer is written and
-						 * there is no opcode reply. */
-						if (n[i] == 0 &&
-						    ((i == 0 && !op) || i == 1)) {
-							/* Stop OUT, start IN. */
-							fds[i].fd = r;
-							fds[i].events = POLLIN;
-						}
 					} else if (i == 0 && m[i] == 0) {
 						/* PNG and CLS only, user data
 						 * is drained. */
@@ -696,30 +711,20 @@ out:
 							op &= ~OP_CLS;
 							goto end;
 						}
-
-						if (!op) {
-							fds[i].fd = r;
-							fds[i].events = POLLIN;
-						}
-					} else if (i == 0 && 
+					} else if (i == 0 &&
 						   m[i] == WS_E_UTF8_INCOPMLETE) {
 						/* Partial UTF8 character. */
 						memmove(buf[i], buf[i] +
 								woff[i], n[i]);
 						uoff = n[i];
 						n[i] = 0;
-						/* Stop OUT, start IN. */
-						if (!op) {
-							fds[i].fd = r;
-							fds[i].events = POLLIN;
-						}
 					} else {
 						if ((i == 0 && WS_E_SOFT(m[i])) ||
 						    (i == 1 && UNIX_E_SOFT))
 							break;
 						if (i == 0)
 							warnx("ws_%s(): "
-								"failed 0x%zX",
+								"failed -0x%zX",
 								n[i] > 0 ?
 									"write" :
 								op & OP_PNG ?
@@ -729,6 +734,14 @@ out:
 						else
 							warn("write()");
 						goto end;
+					}
+					/* The buffer is written and
+					 * there is no opcode reply. */
+					if (n[i] == 0 &&
+					    ((i == 0 && !op) || i == 1)) {
+						/* Stop OUT, start IN. */
+						fds[i].fd = r;
+						fds[i].events = POLLIN;
 					}
 				}
 			}
@@ -836,35 +849,38 @@ int main(int argc, char *argv[])
 {
 	extern const char *const __progname;
 	int opt, rev = 0, bin = 0, srv = 0, cert = 0, keep = 0;
-	char *host = NULL, *uri = NULL, *optstr;
+	char *host = NULL, *uri = NULL, *certfile = NULL, *keyfile = NULL;
+	char *optstr;
 	int prog = STREQ(__progname, "ws")   ? WS  :
 		   STREQ(__progname, "tls")  ? TLS :
 		   STREQ(__progname, "inet") ? INET : RDWR;
 
 	int fds[2][2] = {
 		{ STDIN_FILENO, STDOUT_FILENO },
-		{ -1 , -1 }, 
+		{ -1 , -1 }
 	};
 
 	signal(SIGPIPE, SIG_IGN);
 	signal(SIGCHLD, sigchld);
 	srand(time(NULL));
 
-	optstr = prog & WS   ? "brsh:u:" :
-		 prog & TLS  ? "crsh:"   :
-		 prog & INET ? "krs"     : "";
+	optstr = prog & WS   ? "bh:rsu:"	:
+		 prog & TLS  ? "cC:h:K:rs"	:
+		 prog & INET ? "krs"		: "";
 
 	while ((opt = getopt(argc, argv, optstr)) != -1) {
 		switch (opt) {
 #define OPT_BOOL(o, v)  case o: v = 1; break;
 #define OPT_STR(o, v)  case o: v = optarg; break;
-		OPT_BOOL('r', rev)
 		OPT_BOOL('b', bin)
+		OPT_BOOL('c', cert)
+		OPT_STR ('C', certfile)
+		OPT_STR ('h', host)
+		OPT_STR ('K', keyfile)
+		OPT_BOOL('k', keep)
+		OPT_BOOL('r', rev)
 		OPT_BOOL('s', srv)
 		OPT_STR ('u', uri)
-		OPT_STR ('h', host)
-		OPT_BOOL('c', cert)
-		OPT_BOOL('k', keep)
 #undef OPT_STR
 #undef OPT_BOOL
 		default: exit(EXIT_FAILURE);
@@ -877,11 +893,15 @@ int main(int argc, char *argv[])
 	if ((prog & INET && argc < 2 + rev) || argc < 1)
 		errx(EXIT_FAILURE, "not enough arguments");
 
-	if (prog & WS) {
+	if (prog & WS)
 		if (host == NULL || uri == NULL)
 			errx(EXIT_FAILURE, "%s option is not provided",
 					host == NULL ? "host" : "uri");
-	}
+	if (prog & TLS && srv)
+		if ((certfile != NULL && keyfile == NULL) ||
+		    (certfile == NULL && keyfile != NULL))
+			errx(EXIT_FAILURE, "provide both a certificate"
+					" and a private key for TLS server");
 
 	if (prog & INET) {
 		inet_fd(argv[0], argv[1], fds[1], srv, keep);
@@ -903,7 +923,8 @@ int main(int argc, char *argv[])
 		revfd(fds);
 
 	prog & WS   ?  ws(fds, host, uri, srv, bin) :
-	prog & TLS  ? (srv ? tls_srv(fds) : tls_clt(fds, host, cert)) :
+	prog & TLS  ? (srv ? tls_srv(fds, certfile, keyfile) :
+			     tls_clt(fds, host, cert)) :
 	prog & INET ?  rdwr(fds) : rdwr(fds);
 
 #define S(s) s, sizeof(s)-1

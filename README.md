@@ -1,6 +1,6 @@
 # WS + TLS + INET (RDWR)
 
-The tool includes WS client, WS server, TLS client (cert and anon), TLS server (anon only), TCP client, TCP server. GnuTLS is used for TLS.
+The tool includes WS client, WS server, TLS client (cert and anon credentials), TLS server (cert and anon credentials), TCP client, TCP server. GnuTLS is used for TLS.
 
 ## Build
 
@@ -15,31 +15,43 @@ $ make
 
 ### WS
 
--s -- start in server mode
-
--r -- reverse pipes
-
 -b -- force the tool use binary frames (text by default) 
 
 -h host -- set Host header during handshake
 
--u uri -- set uri during handshake
+-r -- reverse pipes
 
-### TLS
 -s -- start in server mode
 
--r -- reverse pipes
+-u uri -- set uri during handshake
+
+
+### TLS
 
 -c -- use certificate credentials (client only) 
 
+-C certfile -- use a certificate (server only, check -K option)
+
 -h host -- set SNI (Server Name Indication, client only)
 
-### INET
--s -- start in server mode
+-K keyfile -- use a private key related to a certificate file (server only, check -C option)
 
 -r -- reverse pipes
 
+-s -- start in server mode
+
+
+By default (no arguments) TLS uses anon credentials, to use certificate credentials there are -c option for a client and -C and -K options for a server.
+
+
+### INET
+
 -k -- keep accepting new connections (by default accept only one, server only)
+
+-r -- reverse pipes
+
+-s -- start in server mode
+
 
 The last two arguments are host and port.
 
@@ -99,6 +111,12 @@ Add TLS client and server to the previous chain:
 ```
 $ PATH=$PATH:.
 $ ws -h test -u / -- tls -- tls -r -s -- ws -r -s -h test -u / -- cat
+```
+
+TLS client and server with certificate credentials:
+```
+$ PATH=$PATH:.
+$ ws -h test -u / -- tls -c -- tls -r -s -C cert.pem -K key.pem -- ws -r -s -h test -u / -- cat
 ```
 
 
