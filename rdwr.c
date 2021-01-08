@@ -21,7 +21,7 @@
 
 #define UNIX_E_SOFT	(errno == EINTR || errno == EAGAIN || \
 			 errno == EWOULDBLOCK)
-#define TLS_E_SOFT(e)	((e) == GNUTLS_E_INTERRUPTED || (e) == GNUTLS_E_AGAIN)
+#define TLS_E_SOFT(e)	(!gnutls_error_is_fatal(e))
 #define WS_E_SOFT(e)	((e) == WS_E_WANT_READ || (e) == WS_E_WANT_WRITE)
 #define WS_E_OP(e)	((e) == WS_E_OP_PING || (e) == WS_E_OP_PONG || \
 			 (e) == WS_E_OP_CLOSE)
@@ -268,11 +268,12 @@ static void tls_get_int2(gnutls_session_t sess, int *r, int *w)
 static void tls_handshake(gnutls_session_t s)
 {
 	int rc, r, rfd, wfd;
+	char *desc;
 
 	tls_get_int2(s, &rfd, &wfd);
 
 	while ((rc = gnutls_handshake(s)) != GNUTLS_E_SUCCESS) {
-		if (rc == GNUTLS_E_INTERRUPTED || rc == GNUTLS_E_AGAIN) {
+		if (TLS_E_SOFT(rc)) {
 			r = !gnutls_record_get_direction(s);
 			wait_event(r ? rfd : wfd, r);
 		} else {
@@ -280,6 +281,10 @@ static void tls_handshake(gnutls_session_t s)
 						gnutls_strerror(rc));
 		}
 	}
+
+	desc = gnutls_session_get_desc(s);
+	warnx("Handshake is completed: %s", desc);
+	gnutls_free(desc);
 }
 
 static void tls_bye(gnutls_session_t s, gnutls_close_request_t how)
@@ -289,7 +294,7 @@ static void tls_bye(gnutls_session_t s, gnutls_close_request_t how)
 	tls_get_int2(s, &rfd, &wfd);
 
 	while ((rc = gnutls_bye(s, how)) != GNUTLS_E_SUCCESS) {
-		if (rc == GNUTLS_E_INTERRUPTED || rc == GNUTLS_E_AGAIN) {
+		if (TLS_E_SOFT(rc)) {
 			r = !gnutls_record_get_direction(s);
 			wait_event(r ? rfd : wfd, r);
 		} else {
@@ -306,7 +311,6 @@ static void tls(gnutls_session_t s, int fd[2][2])
 	ssize_t n[2] = { 0, 0 }, m[2];
 	size_t woff[2], tlsrest;
 	int rc, i, j, r, w, timeout, bye;
-	char *desc;
 
 	/* [0][0] and [0][1] are for plane data,
 	 * [1][0] and [1][1] are for TLS data. */
@@ -315,10 +319,6 @@ static void tls(gnutls_session_t s, int fd[2][2])
 	gnutls_transport_set_push_function(s, tlso);
 
 	tls_handshake(s);
-	desc = gnutls_session_get_desc(s);
-       	warnx("Handshake is completed: %s", desc);
-	gnutls_free(desc);
-
 	/* 0 is so called forward path, 1 is backward path. */
 	fds[0].fd = fd[0][0];
 	fds[0].events = POLLIN;
@@ -451,33 +451,39 @@ static int verify_callback(gnutls_session_t s)
 	return status;
 }
 
+#define G(f, ...) \
+do { \
+	if ((rc = gnutls_ ## f(__VA_ARGS__)) < 0) \
+		errx(EXIT_FAILURE, "%s(): %s", #f, gnutls_strerror(rc)); \
+} while (0)
+
 static void tls_clt(int fds[2][2], const char *host, int cert, int noverify)
 {
 	gnutls_certificate_credentials_t certcred;
 	gnutls_anon_client_credentials_t anoncred;
 	gnutls_session_t s;
+	int rc;
 
-	gnutls_global_init();
+	G(global_init);
 	if (cert) {
-		gnutls_certificate_allocate_credentials(&certcred);
-		gnutls_certificate_set_x509_system_trust(certcred);
+		G(certificate_allocate_credentials, &certcred);
+		G(certificate_set_x509_system_trust, certcred);
 		if (!noverify)
 			gnutls_certificate_set_verify_function(certcred,
 							verify_callback);
 	} else {
-		gnutls_anon_allocate_client_credentials(&anoncred);
+		G(anon_allocate_client_credentials, &anoncred);
 	}
 
 
-	gnutls_init(&s, GNUTLS_CLIENT);
-	gnutls_priority_set_direct(s, cert ? "PERFORMANCE" :
-					     "PERFORMANCE:+ANON-DH", NULL);
+	G(init, &s, GNUTLS_CLIENT);
+	G(priority_set_direct, s, cert ? "PERFORMANCE" :
+					 "PERFORMANCE:+ANON-DH", NULL);
 
-	gnutls_credentials_set(s, cert ?
-				GNUTLS_CRD_CERTIFICATE : GNUTLS_CRD_ANON,
-				  cert ? (void *)certcred : (void *)anoncred);
+	G(credentials_set, s, cert ? GNUTLS_CRD_CERTIFICATE : GNUTLS_CRD_ANON,
+			     cert ? (void *)certcred : (void *)anoncred);
 	if (host)
-		gnutls_server_name_set(s, GNUTLS_NAME_DNS, host, strlen(host));
+		G(server_name_set, s, GNUTLS_NAME_DNS, host, strlen(host));
 
 	tls(s, fds);
 
@@ -496,36 +502,30 @@ static void tls_srv(int fds[2][2], const char *certfile, const char *keyfile)
 	gnutls_dh_params_t dh_params;
 	gnutls_session_t s;
 	int rc, cert = certfile != NULL && keyfile != NULL;
+
 #define DH_BITS		1024
-	gnutls_global_init();
+	G(global_init);
 	if (cert) {
-		gnutls_certificate_allocate_credentials(&certcred);
-		rc = gnutls_certificate_set_x509_key_file(certcred,
-							  certfile,
-							  keyfile,
-							  GNUTLS_X509_FMT_PEM);
-		if (rc != GNUTLS_E_SUCCESS)
-			errx(EXIT_FAILURE, "gnutls_certificate_set_x509"
-						"_key_file(): %s",
-							gnutls_strerror(rc));
+		G(certificate_allocate_credentials, &certcred);
+		G(certificate_set_x509_key_file, certcred, certfile,
+					keyfile, GNUTLS_X509_FMT_PEM);
 	} else {
-		gnutls_anon_allocate_server_credentials(&anoncred);
+		G(anon_allocate_server_credentials, &anoncred);
 	}
 
-	gnutls_dh_params_init(&dh_params);
-	gnutls_dh_params_generate2(dh_params, DH_BITS);
+	G(dh_params_init, &dh_params);
+	G(dh_params_generate2, dh_params, DH_BITS);
 
 	if (cert)
 		gnutls_certificate_set_dh_params(certcred, dh_params);
 	else
 		gnutls_anon_set_server_dh_params(anoncred, dh_params);
 
-	gnutls_init(&s, GNUTLS_SERVER);
-	gnutls_priority_set_direct(s, cert ? "PERFORMANCE" :
-					     "PERFORMANCE:+ANON-DH", NULL);
-	gnutls_credentials_set(s, cert ?
-				GNUTLS_CRD_CERTIFICATE : GNUTLS_CRD_ANON,
-				  cert ? (void *)certcred : (void *)anoncred);
+	G(init, &s, GNUTLS_SERVER);
+	G(priority_set_direct, s, cert ? "PERFORMANCE" :
+					 "PERFORMANCE:+ANON-DH", NULL);
+	G(credentials_set, s, cert ? GNUTLS_CRD_CERTIFICATE : GNUTLS_CRD_ANON,
+			      cert ? (void *)certcred : (void *)anoncred);
 #undef DH_BITS
 	tls(s, fds);
 
@@ -536,6 +536,7 @@ static void tls_srv(int fds[2][2], const char *certfile, const char *keyfile)
 		gnutls_anon_free_server_credentials(anoncred);
 	gnutls_global_deinit();
 }
+#undef G
 
 static ssize_t wsio(int fd, void *buf, size_t n,
 			ssize_t (*f)(int fd, void *p, size_t n))
