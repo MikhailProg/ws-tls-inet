@@ -460,6 +460,7 @@ static int verify_callback(gnutls_session_t s)
 
 #define G(f, ...) \
 do { \
+	int rc; \
 	if ((rc = gnutls_ ## f(__VA_ARGS__)) < 0) \
 		errx(EXIT_FAILURE, "%s(): %s", #f, gnutls_strerror(rc)); \
 } while (0)
@@ -469,7 +470,6 @@ static void tls_clt(int fds[2][2], const char *host, int cert, int noverify)
 	gnutls_certificate_credentials_t certcred;
 	gnutls_anon_client_credentials_t anoncred;
 	gnutls_session_t s;
-	int rc;
 
 	G(global_init);
 	if (cert) {
@@ -508,7 +508,7 @@ static void tls_srv(int fds[2][2], const char *certfile, const char *keyfile)
 	gnutls_anon_server_credentials_t anoncred;
 	gnutls_dh_params_t dh_params;
 	gnutls_session_t s;
-	int rc, cert = certfile != NULL && keyfile != NULL;
+	int cert = certfile != NULL && keyfile != NULL;
 
 #define DH_BITS		1024
 	G(global_init);
