@@ -310,7 +310,7 @@ static void tls(gnutls_session_t s, int fd[2][2])
 	unsigned char buf[2][BUFSZ];
 	ssize_t n[2] = { 0, 0 }, m[2];
 	size_t woff[2], tlsrest;
-	int rc, i, j, r, w, timeout, bye;
+	int rc, h, i, j, r, w, timeout, bye;
 
 	/* [0][0] and [0][1] are for plane data,
 	 * [1][0] and [1][1] are for TLS data. */
@@ -318,7 +318,6 @@ static void tls(gnutls_session_t s, int fd[2][2])
 	gnutls_transport_set_pull_function(s, tlsi);
 	gnutls_transport_set_push_function(s, tlso);
 
-	tls_handshake(s);
 	/* 0 is so called forward path, 1 is backward path. */
 	fds[0].fd = fd[0][0];
 	fds[0].events = POLLIN;
@@ -326,8 +325,13 @@ static void tls(gnutls_session_t s, int fd[2][2])
 	fds[1].events = POLLIN;
 	/* These is a copy of rdwr() with adjustments for TLS. */
 
-	bye = 1;
+	bye = h = 1;
 	while (fds[0].fd != -1 || fds[1].fd != -1) {
+		if (h) {
+rehand:
+			tls_handshake(s);
+			h = 0;
+		}
 		/* If we are going to poll TLS for IN event then
 		 * check whether TLS state already has bytes to read. */
 		if (fds[1].events == POLLIN) {
@@ -375,6 +379,9 @@ static void tls(gnutls_session_t s, int fd[2][2])
 					/* Stop IN, start OUT. */
 					fds[i].fd = w;
 					fds[i].events = POLLOUT;
+				} else if (i == 1 &&
+					   n[i] == GNUTLS_E_REHANDSHAKE) {
+					goto rehand;
 				} else if (n[i] == 0 ||
 					   ((i == 0 && !UNIX_E_SOFT) ||
 					    (i == 1 && !TLS_E_SOFT(n[i])))) {
