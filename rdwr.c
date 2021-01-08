@@ -575,6 +575,21 @@ static ssize_t wso(void *ctx, const void *buf, size_t n)
 			(ssize_t (*)(int, void *, size_t))write);
 }
 
+static void ws_handshake0(WebSocket *ws, const char *host, const char *uri)
+{
+	int rc, r, *fd = ws->ctx;
+
+	while ((rc = ws_handshake(ws, host, uri, NULL))) {
+		if (WS_E_SOFT(rc)) {
+			r = rc == WS_E_WANT_READ;
+			wait_event(r ? fd[0] : fd[1], r);
+		} else {
+			errx(EXIT_FAILURE, "ws_handshake() failed -0x%X", -rc);
+		}
+	}
+	warnx("Handshake is completed");
+}
+
 #define OP_CLS	0x01
 #define OP_PNG	0x02
 static void ws(int fd[2][2], const char *host, const char *uri,
@@ -596,15 +611,7 @@ static void ws(int fd[2][2], const char *host, const char *uri,
 	ws_set_bio(&ws, fd[1], wso, wsi);
 	ws_write = bin ? ws_bin_write : ws_txt_write;
 
-	while ((rc = ws_handshake(&ws, host, uri, NULL)))
-		if (WS_E_SOFT(rc)) {
-			r = rc == WS_E_WANT_READ;
-			wait_event(r ? fd[1][0] : fd[1][1], r);
-		} else {
-			errx(EXIT_FAILURE, "ws_handshake() failed -0x%X", -rc);
-		}
-	warnx("Handshake is completed");
-
+	ws_handshake0(&ws, host, uri);
 	/* 0 is so called forward path, 1 is backward path. */
 	fds[0].fd = fd[0][0];
 	fds[0].events = POLLIN;
