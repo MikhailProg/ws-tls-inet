@@ -24,6 +24,7 @@ perf() {
         speed=$(sed -n 's/^.* s, //p' log.$$)
         printf "%15s %15s\n" $txt "$speed"
     done <<EOF
+RDWR        @rdwr            -- rdwr   -- rdwr   -- rdwr
 WS(txt)     @ws $wsopt -s    -- rdwr   -- rdwr   -- ws $wsopt -r
 WS(bin)     @ws $wsopt -s -b -- rdwr   -- rdwr   -- ws $wsopt -r -b
 TLS         @rdwr            -- tls -s -- tls -r -- rdwr

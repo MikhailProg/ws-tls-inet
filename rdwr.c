@@ -157,6 +157,8 @@ static void rdwr(int fd[2][2])
 					/* Stop IN, start OUT. */
 					fds[i].fd = w;
 					fds[i].events = POLLOUT;
+					/* Hot path for writing. */
+					goto wr;
 				} else if (n[i] == 0 ||
 					   (n[i] < 0 && !UNIX_E_SOFT)) {
 					if (n[i] < 0)
@@ -169,6 +171,7 @@ static void rdwr(int fd[2][2])
 			}
 
 			if (fds[i].revents & POLLOUT) {
+wr:
 				assert(w == fds[i].fd);
 				assert(n[i] > 0);
 				while (n[i] > 0) {
@@ -379,6 +382,8 @@ rehand:
 					/* Stop IN, start OUT. */
 					fds[i].fd = w;
 					fds[i].events = POLLOUT;
+					/* Hot path for writing. */
+					goto wr;
 				} else if (i == 1 &&
 					   n[i] == GNUTLS_E_REHANDSHAKE) {
 					goto rehand;
@@ -399,6 +404,7 @@ rehand:
 			}
 
 			if (fds[i].revents & POLLOUT) {
+wr:
 				assert(w == fds[i].fd);
 				assert(n[i] > 0);
 				while (n[i] > 0) {
@@ -673,6 +679,8 @@ static void ws(int fd[2][2], const char *host, const char *uri,
 					/* Stop IN, start OUT. */
 					fds[i].fd = w;
 					fds[i].events = POLLOUT;
+					/* Hot path for writing. */
+					goto wr;
 				} else if (i == 1 && WS_E_OP(n[i])) {
 					if (n[i] == WS_E_OP_PONG ||
 					    (n[i] == WS_E_OP_PING &&
@@ -716,9 +724,9 @@ out:
 			}
 
 			if (fds[i].revents & POLLOUT) {
+wr:
 				assert(w == fds[i].fd);
 				assert(n[i] > 0 || (i == 0 && op));
-
 				while (n[i] > 0 || (i == 0 && op)) {
 					if (i == 0 && n[i] > 0)
 						m[i] = ws_write(&ws, buf[i] +
