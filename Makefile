@@ -7,6 +7,10 @@ TARGETS := rdwr ws tls inet
 
 .PHONY: all clean libws
 
+ifdef WS_IO_FUZZ
+  CFLAGS += -DWS_IO_FUZZ
+endif
+
 all: $(TARGETS)
 
 rdwr.o: libws

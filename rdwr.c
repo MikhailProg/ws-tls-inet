@@ -550,7 +550,9 @@ static ssize_t wsio(int fd, void *buf, size_t n,
 {
 	ssize_t rc;
 	int r = f == read;
-
+#ifdef WS_IO_FUZZ
+	n = 1 + rand() % n;
+#endif
 	rc = f(fd, buf, n);
 	if (rc < 0) {
 		if (UNIX_E_SOFT)
