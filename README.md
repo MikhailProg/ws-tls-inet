@@ -15,7 +15,7 @@ $ make
 
 ### WS
 
--b -- force the tool use binary frames (text by default) 
+-b -- force the tool to use binary frames (text by default) 
 
 -h host -- set Host header during handshake
 
@@ -102,7 +102,7 @@ $ inet -r ws.kraken.com 443 -- tls -r -c -h ws.kraken.com -- ws -r -h ws.kraken.
 
 ### Client and server usage
 
-Pass stdin data through a client and a server to cat then cat returns data back through the server and the client to stdout. There are 2 pipes in forward and backward direction:
+Pass stdin data through a client and a server to cat then cat returns data back through the server and the client to stdout. There are 2 pipes in forward and backward directions:
 
 ```
 $ PATH=$PATH:.
@@ -162,8 +162,9 @@ CPU: Intel i7-7700i (looks like TLS uses CPU AES HW acceleration):
 
 ```
 $ GB=4 ./perf.sh 
+           RDWR        3.1 GB/s
         WS(txt)        1.3 GB/s
-        WS(bin)        2.3 GB/s
+        WS(bin)        2.5 GB/s
             TLS        1.6 GB/s
     WS(txt)+TLS        1.2 GB/s
     WS(bin)+TLS        1.5 GB/s
@@ -171,10 +172,11 @@ $ GB=4 ./perf.sh
 In text mode WS has to check each chunk of data for UTF8 correctness. In binary mode WS is almost transparent for WS(bin)+TLS.
 
 
-CPU: Core(TM)2 Duo CPU P8700 (this CPU is ancient there is no CPU AES HW acceleration):
+CPU: Core 2 Duo CPU P8700 (this CPU is ancient there is no CPU acceleration):
 
 ```
 $ ./perf.sh 
+           RDWR        672 MB/s
         WS(txt)        359 MB/s
         WS(bin)        510 MB/s
             TLS        127 MB/s
