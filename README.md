@@ -72,6 +72,13 @@ $ ws -h echo.websocket.org -u / -- tls -c -- inet echo.websocket.org 443
 
 ```
 
+Why don't use regular pipe mechanism? The short answer is because there are two pipes and the connection is bidirectional. The chain can be written in pipe notation (this is no a real command):
+
+```
+$ ws -h echo.websocket.org -u / | tls -c | inet echo.websocket.org 443 | tls -c | ws -h echo.websocket.org -u /
+```
+inet basically splits the chain into two pipes (forward and backward directions), but left and right ws/tls are the same tools. Left ws and tls wrap stdin data in WS and TLS and pass it via inet to the remote host, the right tls and ws remove TLS and WS and output plain data to stdout.
+
 
 Kraken API server. Kraken needs to set SNI (tls -h option).
 
@@ -161,7 +168,7 @@ Run perf.sh.
 CPU: Intel i7-7700i (looks like TLS uses CPU AES HW acceleration):
 
 ```
-$ GB=4 ./perf.sh 
+$ GB=6 ./perf.sh 
            RDWR        3.1 GB/s
         WS(txt)        1.3 GB/s
         WS(bin)        2.5 GB/s
