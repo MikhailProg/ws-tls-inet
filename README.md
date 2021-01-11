@@ -72,7 +72,7 @@ $ ws -h echo.websocket.org -u / -- tls -c -- inet echo.websocket.org 443
 
 ```
 
-Why don't use regular pipe mechanism? The short answer is because there are two pipes and the connection is bidirectional. The chain can be written in pipe notation (this is no a real command):
+Why don't use regular pipe mechanism? The short answer is because there are two pipes and the connection is bidirectional. The chain can be written in pipe notation (this is not a real command):
 
 ```
 $ ws -h echo.websocket.org -u / | tls -c | inet echo.websocket.org 443 | tls -c | ws -h echo.websocket.org -u /
