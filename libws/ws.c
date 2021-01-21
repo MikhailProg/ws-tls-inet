@@ -430,7 +430,8 @@ srv_req(WebSocket *ws, const char *host, const char *uri, const char *uhdrs)
 	char buf[1024];
 	int rc, status;
 	struct http_hdr hdrs[] = {
-		{ "Connection",		 "keep-alive, Upgrade" },
+//		{ "Connection",		 "keep-alive, Upgrade" },
+		{ "Connection",		 "Upgrade" },
 		{ "Upgrade",		 "websocket" },
 		{ "Sec-WebSocket-Accept", buf }
 	};
