@@ -547,7 +547,7 @@ static int srv_handshake(WebSocket *ws, const char *host,
 		switch (ws->h_state) {
 		case STATE_H_INIT:
 			ws->h_state = STATE_H_MSG_RD;
-			/* THROUGH */
+			/* FALLTHRU */
 		case STATE_H_MSG_RD:
 			rc = http_msg_collect(ws);
 			if (rc < 0)
@@ -556,7 +556,7 @@ static int srv_handshake(WebSocket *ws, const char *host,
 				return WS_E_HTTP_EXTRA_DATA;
 			ws->h_state = STATE_H_REQ;
 			ws->h_off = 0;
-			/* THROUGH */
+			/* FALLTHRU */
 		case STATE_H_REQ:
 			rc = srv_req(ws, host, uri, uhdrs);
 			if (rc < 0)
@@ -565,7 +565,7 @@ static int srv_handshake(WebSocket *ws, const char *host,
 			ws->h_data = ws->h_buf;
 			ws->h_left = ws->h_off;
 			ws->h_off = 0;
-			/* THROUGH */
+			/* FALLTHRU */
 		case STATE_H_MSG_WR:
 			n = ws->send(ws->ctx, ws->h_data, ws->h_left);
 			if (n < 0)
@@ -609,7 +609,7 @@ static int usr_handshake(WebSocket *ws, const char *host,
 			ws->h_data = ws->h_buf;
 			ws->h_left = ws->h_off;
 			ws->h_off = 0;
-			/* THROUGH */
+			/* FALLTHRU */
 		case STATE_H_MSG_WR:
 			n = ws->send(ws->ctx, ws->h_data, ws->h_left);
 			if (n < 0)
@@ -619,13 +619,13 @@ static int usr_handshake(WebSocket *ws, const char *host,
 			if (ws->h_left > 0)
 				break;
 			ws->h_state = STATE_H_MSG_RD;
-			/* THROUGH */
+			/* FALLTHRU */
 		case STATE_H_MSG_RD:
 			rc = http_msg_collect(ws);
 			if (rc < 0)
 				return rc;
 			ws->h_state = STATE_H_RES;
-			/* THROUGH */
+			/* FALLTHRU */
 		case STATE_H_RES:
 			rc = usr_res(ws);
 			if (rc < 0)
@@ -858,7 +858,7 @@ ws_write(WebSocket *ws, unsigned char op, const void *buf, size_t n)
 			ws->o_offall = 0;
 			ws->o_lenall = n;
 			ws->o_state = STATE_O_PAYLOAD;
-			/* THROUGH */
+			/* FALLTHRU */
 		case STATE_O_PAYLOAD:
 			assert(WS_O_BUF_LEN(ws) > 0);
 			assert(ws->o_lenall > 0);
@@ -876,7 +876,7 @@ ws_write(WebSocket *ws, unsigned char op, const void *buf, size_t n)
 			ws->o_data = ws->o_buf;
 			ws->o_left = ws->o_off;
 			ws->o_state = STATE_O_DRAIN;
-			/* THROUGH */
+			/* FALLTHRU */
 		case STATE_O_DRAIN:
 			rc = ws->send(ws->ctx, ws->o_data, ws->o_left);
 			if (rc < 0)
@@ -1133,7 +1133,7 @@ static ssize_t ws_handler(WebSocket *ws, union ws_arg *arg, int hnd)
 			if (ws->limit && ws->i_len > ws->limit)
 				return WS_E_TOO_LONG;
 			ws->i_state = STATE_I_PAYLOAD;
-			/* THROUGH */
+			/* FALLTHRU */
 		case STATE_I_PAYLOAD:
 			assert(ws->i_len > 0);
 			len = ws->i_len > WS_I_BUF_LEN(ws) ?
