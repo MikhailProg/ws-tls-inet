@@ -1,4 +1,3 @@
-#define _XOPEN_SOURCE	600
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
@@ -117,7 +116,7 @@ static int chld(char *argv[], int fds[2], int pty)
 		closesafe(pipefds[0][1]);
 		closesafe(pipefds[1][0]);
 
-		for (i = 1; i < _NSIG; i++)
+		for (i = 1; i < NSIG; i++)
 			signal(i, SIG_DFL);
 		sigemptyset(&mask);
 		sigprocmask(SIG_SETMASK, &mask, NULL);

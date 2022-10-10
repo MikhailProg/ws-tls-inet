@@ -1,4 +1,7 @@
 CFLAGS  := -pipe -Wall -Wextra -O2 -Ilibws -DNDEBUG
+# define _XOPEN_SOURCE for posix_openpt
+# define _DEFAULT_SOURCE for NSIG (_XOPEN_SOURCE hides it)
+CFLAGS  += -D_DEFAULT_SOURCE -D_XOPEN_SOURCE=600
 LDFLAGS := -Llibws
 LDLIBS  := -lgnutls -lws -linet
 PWD     := $(shell pwd)
