@@ -5,7 +5,7 @@ PWD     := $(shell pwd)
 
 TARGETS := rdwr ws tls inet
 
-.PHONY: all clean libws
+.PHONY: all clean
 
 ifdef WS_IO_FUZZ
   CFLAGS += -DWS_IO_FUZZ
@@ -13,14 +13,14 @@ endif
 
 all: $(TARGETS)
 
-rdwr.o: libws
+rdwr.o: libws/libws.a
 
 rdwr:
 
 ws inet tls: rdwr
 	ln -s $(PWD)/$< $@
 
-libws:
+libws/libws.a:
 	make -C libws
 
 clean:

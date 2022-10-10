@@ -1,3 +1,4 @@
+#define _XOPEN_SOURCE	600
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
@@ -56,15 +57,51 @@ static void closesafe(int fd)
 	} while (rc < 0 && errno == EINTR);
 }
 
-static int chld(char *argv[], int fds[2])
+static int pty_pair(int fds[2][2])
+{
+	int m = posix_openpt(O_RDWR | O_NOCTTY);
+	if (m < 0)
+		return -1;
+
+	if (grantpt(m) < 0 || unlockpt(m) < 0) {
+		close(m);
+		return -1;
+	}
+
+	char *path = ptsname(m);
+	if (path == NULL) {
+		close(m);
+		return -1;
+	}
+
+	int s = open(path, O_RDWR);
+	if (s < 0) {
+		close(m);
+		return -1;
+	}
+
+	fds[0][0] = m;
+	fds[0][1] = s;
+	fds[1][0] = s;
+	fds[1][1] = m;
+
+	return 0;
+}
+
+static int chld(char *argv[], int fds[2], int pty)
 {
 	sigset_t mask, omask;
 	int pipefds[2][2] = { { -1, -1 }, { -1, -1 } };
 	int i;
 
-	for (i = 0; i < 2; i++)
-		if (pipe(pipefds[i]) < 0)
+	if (pty) {
+		if (pty_pair(pipefds) < 0)
 			goto err0;
+	} else {
+		for (i = 0; i < 2; i++)
+			if (pipe(pipefds[i]) < 0)
+				goto err0;
+	}
 
 	sigfillset(&mask);
 	sigprocmask(SIG_BLOCK, &mask, &omask);
@@ -80,11 +117,11 @@ static int chld(char *argv[], int fds[2])
 		closesafe(pipefds[0][1]);
 		closesafe(pipefds[1][0]);
 
-		for (i = 1; i < NSIG; i++)
+		for (i = 1; i < _NSIG; i++)
 			signal(i, SIG_DFL);
 		sigemptyset(&mask);
 		sigprocmask(SIG_SETMASK, &mask, NULL);
-	
+
 		execvp(argv[0], argv);
 		err(EXIT_FAILURE, "execvp(): %s", argv[0]);
 	}
@@ -124,9 +161,9 @@ static void rdwr(int fd[2][2])
 	fds[1].fd = fd[1][0];
 	fds[1].events = POLLIN;
 
-	/* If read and write fds are equal treat them as a socket. */
-	s0 = fd[0][0] == fd[0][1];
-	s1 = fd[1][0] == fd[1][1];
+	/* If read and write fds are equal treat them as a socket if not tty. */
+	s0 = fd[0][0] == fd[0][1] && !isatty(fd[0][0]);
+	s1 = fd[1][0] == fd[1][1] && !isatty(fd[1][1]);
 
 	while (fds[0].fd != -1 || fds[1].fd != -1) {
 		rc = poll(fds, ARRSZ(fds), -1);
@@ -143,9 +180,7 @@ static void rdwr(int fd[2][2])
 			r = i == 0 ? fd[0][0] : fd[1][0];
 			w = i == 0 ? fd[1][1] : fd[0][1];
 
-			assert(!(fds[i].revents & POLLNVAL));
-
-			if (fds[i].revents & POLLERR)
+			if (fds[i].revents & (POLLERR | POLLNVAL))
 				goto end;
 
 			if (fds[i].revents & (POLLIN | POLLHUP)) {
@@ -359,9 +394,7 @@ rehand:
 			r = i == 0 ? fd[0][0] : fd[1][0];
 			w = i == 0 ? fd[1][1] : fd[0][1];
 
-			assert(!(fds[i].revents & POLLNVAL));
-
-			if (fds[i].revents & POLLERR) {
+			if (fds[i].revents & (POLLERR | POLLNVAL)) {
 				if (i == 1)
 					bye = 0;
 				goto end;
@@ -653,9 +686,7 @@ static void ws(int fd[2][2], const char *host, const char *uri,
 			r = i == 0 ? fd[0][0] : fd[1][0];
 			w = i == 0 ? fd[1][1] : fd[0][1];
 
-			assert(!(fds[i].revents & POLLNVAL));
-
-			if (fds[i].revents & POLLERR)
+			if (fds[i].revents & (POLLERR | POLLNVAL))
 				goto end;
 
 			if (fds[i].revents & (POLLIN | POLLHUP) ||
@@ -802,10 +833,31 @@ end:
 #undef OP_CLS
 #undef OP_PNG
 
-static void sigchld(int signo)
+static void sigchld0(int signo)
 {
 	UNUSED(signo);
-	while (waitpid(-1, NULL, WNOHANG) > 0) ;
+	while (waitpid(-1, NULL, WNOHANG) != -1)
+		;
+}
+
+static void sigchld1(int signo)
+{
+	UNUSED(signo);
+	if (waitpid(-1, NULL, WNOHANG) != -1)
+		exit(EXIT_SUCCESS);
+}
+
+
+static void sigchld_init(int inet_loop)
+{
+	struct sigaction sa;
+
+	memset(&sa, 0, sizeof(sa));
+	sigfillset(&sa.sa_mask);
+	/* Keep accepting new connections in net loop and
+	 * consuming chld zombies */
+	sa.sa_handler = inet_loop ? sigchld0 : sigchld1;
+	sigaction(SIGCHLD, &sa, NULL);
 }
 
 static void revfd(int fds[2][2])
@@ -825,6 +877,8 @@ static int srv_loop(int fd)
 	socklen_t slen = sizeof(ss);
 	int afd, q = 0;
 
+	sigchld_init(1);
+
 	while (!q) {
 		slen = sizeof(ss);
 		do {
@@ -839,12 +893,14 @@ static int srv_loop(int fd)
 		switch (fork()) {
 		case 0:
 			q = 1;
-			break;	
+			break;
 		default:
 			closesafe(afd);
 			break;
 		}
 	}
+
+	sigchld_init(0);
 	/* child */
 	closesafe(fd);
 	return afd;
@@ -889,7 +945,8 @@ static int inet_fd(const char *addr, const char *port,
 int main(int argc, char *argv[])
 {
 	extern const char *const __progname;
-	int opt, rev = 0, bin = 0, srv = 0, cert = 0, keep = 0, noverify = 0;
+	int opt, rev = 0, bin = 0, srv = 0;
+	int cert = 0, keep = 0, noverify = 0, pty = 0;
 	char *host = NULL, *uri = NULL, *certfile = NULL, *keyfile = NULL;
 	char *optstr;
 	int prog = STREQ(__progname, "ws")   ? WS  :
@@ -901,13 +958,14 @@ int main(int argc, char *argv[])
 		{ -1 , -1 }
 	};
 
+	sigchld_init(0);
 	signal(SIGPIPE, SIG_IGN);
-	signal(SIGCHLD, sigchld);
+
 	srand(time(NULL));
 
-	optstr = prog & WS   ? "bh:rsu:"	:
-		 prog & TLS  ? "cC:h:K:nrs"	:
-		 prog & INET ? "krs"		: "";
+	optstr = prog & WS   ? "bh:rsTu:"	:
+		 prog & TLS  ? "cC:h:K:nrsT"	:
+		 prog & INET ? "krsT"		: "T";
 
 	while ((opt = getopt(argc, argv, optstr)) != -1) {
 		switch (opt) {
@@ -922,6 +980,7 @@ int main(int argc, char *argv[])
 		OPT_BOOL('n', noverify)
 		OPT_BOOL('r', rev)
 		OPT_BOOL('s', srv)
+		OPT_BOOL('T', pty)
 		OPT_STR ('u', uri)
 #undef OPT_STR
 #undef OPT_BOOL
@@ -934,6 +993,9 @@ int main(int argc, char *argv[])
 
 	if ((prog & INET && argc < 2 + rev) || argc < 1)
 		errx(EXIT_FAILURE, "not enough arguments");
+
+	if (prog & INET && !rev && pty)
+		warnx("pty won't be created");
 
 	if (prog & WS)
 		if (host == NULL || uri == NULL)
@@ -949,9 +1011,9 @@ int main(int argc, char *argv[])
 		inet_fd(argv[0], argv[1], fds[1], srv, keep);
 		/* For inet in case of reverse option replace
 		 * STDIN/STDOUT with child process fds. */
-		if (rev && chld(argv + 2, fds[0]) < 0)
+		if (rev && chld(argv + 2, fds[0], pty) < 0)
 			errx(EXIT_FAILURE, "can not run child");
-	} else if (chld(argv, fds[1]) < 0) {
+	} else if (chld(argv, fds[1], pty) < 0) {
 		errx(EXIT_FAILURE, "can not run child");
 	}
 
@@ -970,7 +1032,8 @@ int main(int argc, char *argv[])
 	prog & INET ?  rdwr(fds) : rdwr(fds);
 
 #define S(s) s, sizeof(s)-1
-	write(STDERR_FILENO, S("END\n"));
+	int unused = write(STDERR_FILENO, S("END\n"));
+	UNUSED(unused);
 #undef S
 	return EXIT_SUCCESS;
 }

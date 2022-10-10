@@ -6,6 +6,8 @@ trap 'rm -f /tmp/check.$$ /tmp/file.$$' EXIT
 
 PATH=$PATH:.
 
+command -v rdwr || { echo >&2 'error: build the project'; exit 1; }
+
 check() {
     COUNT="1 5 10"
     wsopt="-h test -u /"
@@ -15,7 +17,7 @@ check() {
 
             u=$unit
             if [ "$u" = c ]; then
-                u=b 
+                u=b
             fi
             # Test all transports at once.
             # Passing count bytes through forward and backward paths.

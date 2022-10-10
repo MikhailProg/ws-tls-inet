@@ -13,6 +13,11 @@ $ make
 
 ## Options
 
+### RDWR (simple data bypass loop)
+
+-T -- create a terminal pair instead of pipe for child process
+
+
 ### WS
 
 -b -- force the tool to use binary frames (text by default) 
@@ -22,6 +27,8 @@ $ make
 -r -- reverse pipes
 
 -s -- start in server mode
+
+-T -- create a terminal pair instead of pipe for child process
 
 -u uri -- set uri during handshake
 
@@ -42,6 +49,7 @@ $ make
 
 -s -- start in server mode
 
+-T -- create a terminal pair instead of pipe for child process
 
 By default (no arguments) TLS uses anon credentials, to use certificate credentials there are -c option for a client and -C and -K options for a server.
 
@@ -53,6 +61,8 @@ By default (no arguments) TLS uses anon credentials, to use certificate credenti
 -r -- reverse pipes
 
 -s -- start in server mode
+
+-T -- create a terminal pair instead of pipe for child process
 
 
 The last two arguments are host and port.
@@ -142,8 +152,16 @@ Connect from another terminals to WS remote shell server:
 ```
 $ PATH=$PATH:.
 $ ws -h test -u / -- inet localhost 1234
-
 ```
+
+To run bash which is associated with the control terminal extend the previous command with -T:
+```
+$ PATH=$PATH:.
+$ setsid inet -r -s -k localhost 1234 -- ws -r -s -h test -u / -T -- setsid sh -c 'exec bash -i 2>&1' >/dev/null </dev/null 2>&1
+```
+
+this option forces ws to open pseudoterminal devices (master and slave) and to pass data via master, the slave side will be the input/output for child process (bash). Run bash with setsid it needs to be a session leader to use the control terminal.
+
 
 ## Test and perfomance
 
