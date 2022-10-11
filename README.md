@@ -154,13 +154,13 @@ $ PATH=$PATH:.
 $ ws -h test -u / -- inet localhost 1234
 ```
 
-To run bash which is associated with the control terminal extend the previous command with -T:
+To run bash with own control terminal extend the previous command with -T:
 ```
 $ PATH=$PATH:.
 $ setsid inet -r -s -k localhost 1234 -- ws -r -s -h test -u / -T -- setsid sh -c 'exec bash -i 2>&1' >/dev/null </dev/null 2>&1
 ```
 
-this option forces ws to open pseudoterminal devices (master and slave) and to pass data via master, the slave side will be the input/output for child process (bash). Run bash with setsid it needs to be a session leader to use the control terminal.
+it forces ws to create pseudoterminal devices (master and slave) and to pass data via master, the slave device becomes the input/output for child process. Use another setsid to make bash a session leader to open the control terminal.
 
 
 ## Test and perfomance
