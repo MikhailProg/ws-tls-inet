@@ -6,7 +6,7 @@ trap 'rm -f /tmp/check.$$ /tmp/file.$$' EXIT
 
 PATH=$PATH:.
 
-command -v rdwr || { echo >&2 'error: build the project'; exit 1; }
+command -v rdwr > /dev/null || { echo >&2 'error: build the project'; exit 1; }
 
 check() {
     COUNT="1 5 10"
