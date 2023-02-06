@@ -832,30 +832,20 @@ end:
 #undef OP_CLS
 #undef OP_PNG
 
-static void sigchld0(int signo)
+static void sigchld(int signo)
 {
 	UNUSED(signo);
 	while (waitpid(-1, NULL, WNOHANG) != -1)
 		;
 }
 
-static void sigchld1(int signo)
-{
-	UNUSED(signo);
-	if (waitpid(-1, NULL, WNOHANG) != -1)
-		exit(EXIT_SUCCESS);
-}
-
-
-static void sigchld_init(int inet_loop)
+static void sigchld_init()
 {
 	struct sigaction sa;
 
 	memset(&sa, 0, sizeof(sa));
 	sigfillset(&sa.sa_mask);
-	/* Keep accepting new connections in net loop and
-	 * consuming chld zombies */
-	sa.sa_handler = inet_loop ? sigchld0 : sigchld1;
+	sa.sa_handler = sigchld;
 	sigaction(SIGCHLD, &sa, NULL);
 }
 
@@ -875,8 +865,6 @@ static int srv_loop(int fd)
 	struct sockaddr_storage ss;
 	socklen_t slen = sizeof(ss);
 	int afd, q = 0;
-
-	sigchld_init(1);
 
 	while (!q) {
 		slen = sizeof(ss);
@@ -899,7 +887,6 @@ static int srv_loop(int fd)
 		}
 	}
 
-	sigchld_init(0);
 	/* child */
 	closesafe(fd);
 	return afd;
@@ -957,7 +944,7 @@ int main(int argc, char *argv[])
 		{ -1 , -1 }
 	};
 
-	sigchld_init(0);
+	sigchld_init();
 	signal(SIGPIPE, SIG_IGN);
 
 	srand(time(NULL));

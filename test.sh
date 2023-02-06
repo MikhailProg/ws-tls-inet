@@ -22,7 +22,7 @@ check() {
             # Test all transports at once.
             # Passing count bytes through forward and backward paths.
             printf "ReadWrite %3d$u: " $count
-            ws $wsopt -- tls -- rdwr -- tls -s -r -- ws $wsopt -s -r -- cat < \
+            rdwr -- ws $wsopt -- tls -- tls -s -r -- ws $wsopt -s -r -- cat < \
                         /tmp/file.$$ >/tmp/check.$$ 2>/dev/null
 
             cmp -s /tmp/check.$$ /tmp/file.$$ && echo PASS || echo FAIL
