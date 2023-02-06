@@ -210,3 +210,10 @@ $ ./perf.sh
 ```
 
 
+Build and run tests in docker:
+
+```
+$ docker build -t ws-tls-inet .
+$ docker run -it ws-tls-inet
+```
+
