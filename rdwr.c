@@ -30,7 +30,9 @@
 #define ARRSZ(a)	(sizeof((a)) / sizeof((a)[0]))
 #define STREQ(s1, s2)	(strcmp(s1, s2) == 0)
 
-#define BUFSZ		16384
+#define BUFSZ		65536
+
+static void (*chldcb)();
 
 static int fd_cloexec(int fd)
 {
@@ -832,11 +834,20 @@ end:
 #undef OP_CLS
 #undef OP_PNG
 
+static void timeout_exit()
+{
+	/* Set enough time to read left bytes when a child has
+	 * gone then terminate a process by default SIGALRM handler. */
+	alarm(5);
+}
+
 static void sigchld(int signo)
 {
 	UNUSED(signo);
-	while (waitpid(-1, NULL, WNOHANG) != -1)
-		;
+	while (waitpid(-1, NULL, WNOHANG) != -1) {
+		if (chldcb)
+			chldcb();
+	}
 }
 
 static void sigchld_init()
@@ -847,6 +858,7 @@ static void sigchld_init()
 	sigfillset(&sa.sa_mask);
 	sa.sa_handler = sigchld;
 	sigaction(SIGCHLD, &sa, NULL);
+	chldcb = timeout_exit;
 }
 
 static void revfd(int fds[2][2])
@@ -865,6 +877,9 @@ static int srv_loop(int fd)
 	struct sockaddr_storage ss;
 	socklen_t slen = sizeof(ss);
 	int afd, q = 0;
+
+	/* Reset a callback just keep collecting children. */
+	chldcb = NULL;
 
 	while (!q) {
 		slen = sizeof(ss);
@@ -888,7 +903,9 @@ static int srv_loop(int fd)
 	}
 
 	/* child */
+	sigchld_init();
 	closesafe(fd);
+
 	return afd;
 }
 
