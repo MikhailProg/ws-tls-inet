@@ -11,6 +11,12 @@ $ sudo apt-get install libgnutls28-dev
 $ make
 ```
 
+Docker build (deps are baked in Dockerfile):
+
+```
+$ docker build -t ws-tls-inet .
+```
+
 ## Options
 
 ### RDWR (simple data bypass loop)
@@ -210,10 +216,9 @@ $ ./perf.sh
 ```
 
 
-Build and run tests in docker:
+Run tests in docker:
 
 ```
-$ docker build -t ws-tls-inet .
 $ docker run -it ws-tls-inet
 ```
 
