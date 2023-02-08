@@ -187,6 +187,12 @@ ReadWrite  10M: PASS
 
 ```
 
+Run tests in docker:
+
+```
+$ docker run -it ws-tls-inet
+```
+
 Run perf.sh.
 
 CPU: Intel i7-7700i (looks like TLS uses CPU AES HW acceleration):
@@ -214,11 +220,3 @@ $ ./perf.sh
     WS(txt)+TLS        104 MB/s
     WS(bin)+TLS        123 MB/s
 ```
-
-
-Run tests in docker:
-
-```
-$ docker run -it ws-tls-inet
-```
-
