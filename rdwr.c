@@ -843,11 +843,15 @@ static void timeout_exit()
 
 static void sigchld(int signo)
 {
+	int save_errno = errno;
+	
 	UNUSED(signo);
 	while (waitpid(-1, NULL, WNOHANG) != -1) {
 		if (chldcb)
 			chldcb();
 	}
+	
+	errno = save_errno;
 }
 
 static void sigchld_init()
