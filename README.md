@@ -2,6 +2,8 @@
 
 The tool includes WS client, WS server, TLS client (cert and anon credentials), TLS server (cert and anon credentials), TCP client, TCP server. GnuTLS is used for TLS.
 
+Clients and servers can be chained together in one command line with a chain operator '--' to build any imaginable connection configuration.
+
 ## Build
 
 GnuTLS dev package name may be different for your distro.
